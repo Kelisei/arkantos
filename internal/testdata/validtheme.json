@@ -1,0 +1,7 @@
+{
+    "Name": "darktheme.json",
+    "Version": "1.0.0",
+    "Description": "Dark theme for Arkantos",
+    "BgColor": "#131313",
+    "FontColor": "#FFFFFF"
+}

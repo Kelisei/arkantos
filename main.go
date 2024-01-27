@@ -17,10 +17,17 @@ func start() error {
 		return err
 	}
 	theme, err = internal.ThemeParse(config.ThemeName)
+	rl.InitWindow(800, 800, "Arkantos")
+	rl.SetWindowState(rl.FlagWindowMaximized | rl.FlagWindowResizable)
+	rl.MaximizeWindow()
 	return err
 }
-func input()  {}
-func update() {}
+func input() {
+
+}
+func update() {
+
+}
 func render() {
 	rl.BeginDrawing()
 	rl.DrawFPS(10, 10)
@@ -30,14 +37,11 @@ func render() {
 
 func main() {
 	err := start()
+	defer rl.CloseWindow()
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	rl.InitWindow(800, 800, "Arkantos")
-	rl.SetWindowState(rl.FlagWindowMaximized | rl.FlagWindowResizable)
-	rl.MaximizeWindow()
-	defer rl.CloseWindow()
 	rl.SetTargetFPS(120)
 	for !rl.WindowShouldClose() {
 		render()

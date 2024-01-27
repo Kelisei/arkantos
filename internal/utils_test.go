@@ -8,17 +8,13 @@ import (
 func TestLoadConfig(t *testing.T) {
 
 	t.Run("valid config", func(t *testing.T) {
-		// Arrange
-		const validPath = "testdata/valid.json"
+		const validPath = "testdata/validconfig.json"
 
-		// Act
 		conf, err := LoadConfig(validPath)
 
-		// Assert
 		if err != nil {
 			t.Fatal(err)
 		}
-		// assert conf is populated as expected
 		if conf.ThemeName != "darktheme" {
 			t.Fatal("Expected conf.ThemeName to be 'darktheme' but got " + conf.ThemeName)
 		}
@@ -32,28 +28,50 @@ func TestLoadConfig(t *testing.T) {
 	})
 
 	t.Run("invalid path", func(t *testing.T) {
-		// Arrange
 		const invalidPath = "testdata/does_not_exist.json"
 
-		// Act
 		_, err := LoadConfig(invalidPath)
 
-		// Assert
 		if err == nil {
 			t.Error("Expected error for invalid path but got none")
 		}
 	})
 
 	t.Run("invalid JSON", func(t *testing.T) {
-		// Arrange
-		const invalidJSONPath = "testdata/invalid.json"
+		const invalidJSONPath = "testdata/invalidconfig.json"
 
-		// Act
 		_, err := LoadConfig(invalidJSONPath)
 
-		// Assert
 		if err == nil {
 			t.Error("Expected error for invalid JSON but got none")
+		}
+	})
+
+}
+
+func TestThemeParse(t *testing.T) {
+
+	t.Run("valid theme", func(t *testing.T) {
+		theme, err := ThemeParse("testdata/validtheme")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if theme.Name != "darktheme.json" {
+			t.Errorf("Expected name to be 'darktheme.json' but got %s", theme.Name)
+		}
+	})
+
+	t.Run("invalid theme file", func(t *testing.T) {
+		_, err := ThemeParse("testdata/invalidtheme")
+		if err == nil {
+			t.Error("Expected error but got none")
+		}
+	})
+
+	t.Run("theme not found", func(t *testing.T) {
+		_, err := ThemeParse("testdata/doesnotexist")
+		if err == nil {
+			t.Errorf("Expected not exists error but got %v", err)
 		}
 	})
 
