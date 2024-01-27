@@ -54,6 +54,8 @@ func NewTheme(theme json_theme) Theme {
 	return t
 }
 
+// Given the path string, it json decodes it and then returns a configuration struct
+// with all the data.
 func LoadConfig(path string) (Configuration, error) {
 	config := Configuration{}
 	file, err := os.Open(path)
@@ -65,6 +67,8 @@ func LoadConfig(path string) (Configuration, error) {
 	return config, err
 }
 
+// Given the theme name, it json decodes it and then parses the values so
+// it can be used by raylib.
 func ThemeParse(theme_name string) (Theme, error) {
 	file, _ := os.Open(theme_name + ".json")
 	defer file.Close()
