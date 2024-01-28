@@ -15,6 +15,7 @@ var currentBuffer int
 // The start function, loads the configuration file, get's the theme selected
 // setups the window, creates and initializes a buffer slice
 func start(debug bool) error {
+	rl.SetConfigFlags(rl.FlagMsaa4xHint)
 	rl.InitWindow(800, 800, "Arkantos")
 	var err error
 	config, err = internal.LoadConfig("arkantos.conf")
@@ -23,6 +24,7 @@ func start(debug bool) error {
 	}
 	theme, err = internal.ThemeParse(config.ThemeName)
 	rl.SetWindowState(rl.FlagWindowMaximized | rl.FlagWindowResizable)
+	rl.SetConfigFlags(rl.FlagMsaa4xHint)
 	rl.MaximizeWindow()
 	openedBuffers = make([]internal.Buffer, 0)
 	currentBuffer = 0
@@ -48,9 +50,9 @@ func render() error {
 	rl.BeginDrawing()
 	rl.DrawFPS(1800, 10)
 	rl.ClearBackground(theme.BgColor)
-	// err := openedBuffers[currentBuffer].RenderBuffer(config.FontSize, theme.FontColor, theme.Highlight, config.MainFont)
+	err := openedBuffers[currentBuffer].RenderBuffer(config.FontSize, theme.FontColor, theme.Highlight, config.MainFont)
 	rl.EndDrawing()
-	return nil //err
+	return err
 }
 
 func main() {

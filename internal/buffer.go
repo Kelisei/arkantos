@@ -62,8 +62,10 @@ func (b *Buffer) RenderBuffer(fontSize int, fontColor, highlight rl.Color, font 
 			lineNumber = strconv.Itoa(i + 1)
 			lineNumberColor = highlight
 		}
-		rl.DrawText(lineNumber, int32(b.Padding+1), int32(i*fontSize), int32(fontSize), lineNumberColor)
-		rl.DrawText(line, int32(b.Padding+fontSize), int32(i*fontSize), int32(fontSize), fontColor)
+		position := rl.Vector2{X: float32(b.Padding + 1), Y: float32(i * fontSize)}
+		rl.DrawTextEx(font, lineNumber, position, float32(fontSize), float32(fontSize), lineNumberColor)
+		position.X = float32(b.Padding + fontSize)
+		rl.DrawTextEx(font, line, position, float32(fontSize), 0, fontColor)
 	}
 	return nil
 }

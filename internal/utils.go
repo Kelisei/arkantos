@@ -62,7 +62,9 @@ func NewTheme(theme jsonTheme) Theme {
 }
 
 func NewConfig(c jsonConfig) Configuration {
-	return Configuration{ThemeName: c.ThemeName, FontSize: c.FontSize, MainFont: rl.LoadFont("static/fonts/" + c.MainFont)}
+	font := rl.LoadFont("static/fonts/" + c.MainFont)
+	rl.SetTextureFilter(font.Texture, rl.TextureFilterMipNearest)
+	return Configuration{ThemeName: c.ThemeName, FontSize: c.FontSize, MainFont: font}
 }
 
 // Given the path string, it json decodes it and then returns a configuration struct
