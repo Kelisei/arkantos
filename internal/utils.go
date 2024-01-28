@@ -11,9 +11,15 @@ import (
 )
 
 type Configuration struct {
-	ThemeName  string
-	FontSize   int
-	FontFamily string
+	ThemeName string
+	FontSize  int
+	MainFont  rl.Font
+}
+
+type jsonConfig struct {
+	ThemeName string
+	FontSize  int
+	MainFont  string
 }
 
 type Theme struct {
@@ -22,49 +28,55 @@ type Theme struct {
 	Description string
 	BgColor     rl.Color
 	FontColor   rl.Color
+	Highlight   rl.Color
 }
 
-type json_theme struct {
+type jsonTheme struct {
 	Name        string
 	Version     string
 	Description string
 	BgColor     string
 	FontColor   string
+	Highlight   string
 }
 
-func NewTheme(theme json_theme) Theme {
+func hexToRaylib(hexa string) rl.Color {
+	rgba, err := hex.DecodeString(hexa[1:])
+	if err != nil {
+		fmt.Println(err)
+		return rl.White
+	} else {
+		return rl.NewColor(rgba[0], rgba[1], rgba[2], 255)
+	}
+}
+
+func NewTheme(theme jsonTheme) Theme {
 	t := Theme{}
 	t.Name = theme.Name
 	t.Version = theme.Version
 	t.Description = theme.Description
-	rgba, err := hex.DecodeString(theme.BgColor[1:])
-	if err != nil {
-		fmt.Println(err)
-		t.BgColor = rl.White
-	} else {
-		t.BgColor = rl.NewColor(rgba[0], rgba[1], rgba[2], 255)
-	}
-	rgba, err = hex.DecodeString(theme.FontColor[1:])
-	if err != nil {
-		fmt.Println(err)
-		t.FontColor = rl.Blue
-	} else {
-		t.FontColor = rl.NewColor(rgba[0], rgba[1], rgba[2], 255)
-	}
+	t.BgColor = hexToRaylib(theme.BgColor)
+	t.FontColor = hexToRaylib(theme.FontColor)
+	t.Highlight = hexToRaylib(theme.Highlight)
 	return t
+}
+
+func NewConfig(c jsonConfig) Configuration {
+	return Configuration{ThemeName: c.ThemeName, FontSize: c.FontSize, MainFont: rl.LoadFont("static/fonts/" + c.MainFont)}
 }
 
 // Given the path string, it json decodes it and then returns a configuration struct
 // with all the data.
 func LoadConfig(path string) (Configuration, error) {
-	config := Configuration{}
+
 	file, err := os.Open(path)
 	if err != nil {
-		return config, err
+		return Configuration{}, err
 	}
 	defer file.Close()
+	config := jsonConfig{}
 	err = json.NewDecoder(file).Decode(&config)
-	return config, err
+	return NewConfig(config), err
 }
 
 // Given the theme name, it json decodes it and then parses the values so
@@ -72,7 +84,7 @@ func LoadConfig(path string) (Configuration, error) {
 func ThemeParse(theme_name string) (Theme, error) {
 	file, _ := os.Open(theme_name + ".json")
 	defer file.Close()
-	theme := json_theme{}
+	theme := jsonTheme{}
 	err := json.NewDecoder(file).Decode(&theme)
 	if err != nil {
 		return Theme{}, errors.New("error loading theme file")

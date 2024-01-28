@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -53,21 +52,28 @@ func NewBuffer(path string) (Buffer, error) {
 	return Buffer{Path: path, Mode: Insert, Lines: lines, BufferCursor: cursor, UndoList: undos, Padding: 10}, nil
 }
 
-func (b *Buffer) RenderBuffer(fontSize int, fontColor rl.Color) error {
+func (b *Buffer) RenderBuffer(fontSize int, fontColor, highlight rl.Color, font rl.Font) error {
 	for i, line := range b.Lines {
 		var lineNumber string
+		lineNumberColor := rl.White
 		if i != b.BufferCursor.Y {
 			lineNumber = strconv.Itoa(absInt(i - b.BufferCursor.Y))
 		} else {
-			fmt.Printf("%d is the number cursor \n", i)
-			lineNumber = strconv.Itoa(i)
+			lineNumber = strconv.Itoa(i + 1)
+			lineNumberColor = highlight
 		}
-		fmt.Printf("For Line index %d , the relative number was %s \n", i, lineNumber)
-		rl.DrawTextEx(lineNumber, int32(b.Padding+1), int32(i*fontSize), int32(fontSize), fontColor)
+		rl.DrawText(lineNumber, int32(b.Padding+1), int32(i*fontSize), int32(fontSize), lineNumberColor)
 		rl.DrawText(line, int32(b.Padding+fontSize), int32(i*fontSize), int32(fontSize), fontColor)
 	}
 	return nil
 }
 func (b *Buffer) ListenInput() {
-
+	if b.Mode == Insert {
+		if rl.IsKeyPressed(rl.KeyJ) && b.BufferCursor.Y < len(b.Lines)-1 {
+			b.BufferCursor.Y++
+		}
+		if rl.IsKeyPressed(rl.KeyK) && b.BufferCursor.Y > 0 {
+			b.BufferCursor.Y--
+		}
+	}
 }
