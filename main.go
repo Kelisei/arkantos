@@ -59,7 +59,7 @@ func render() error {
 func main() {
 	err := start(true)
 	if err != nil {
-		fmt.Println(err)
+		internal.LogError(err)
 		return
 	}
 	fmt.Println(openedBuffers[currentBuffer].BufferCursor)
@@ -68,5 +68,8 @@ func main() {
 	for !rl.WindowShouldClose() && err == nil {
 		input()
 		err = render()
+		if err != nil {
+			internal.LogError(err)
+		}
 	}
 }
