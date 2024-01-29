@@ -11,6 +11,7 @@ var theme internal.Theme
 var config internal.Configuration
 var openedBuffers []internal.Buffer
 var currentBuffer int
+var keyMap map[int32]string
 
 // The start function, loads the configuration file, get's the theme selected
 // setups the window, creates and initializes a buffer slice
@@ -39,7 +40,6 @@ func start(debug bool) error {
 		fmt.Printf("succesfully opened the testbuffer \n")
 		openedBuffers = append(openedBuffers, debugBuffer)
 	}
-
 	return err
 }
 func input() {
