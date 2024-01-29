@@ -16,7 +16,7 @@ var currentBuffer int
 // setups the window, creates and initializes a buffer slice
 func start(debug bool) error {
 	rl.SetConfigFlags(rl.FlagMsaa4xHint)
-	rl.InitWindow(800, 800, "Arkantos")
+	rl.InitWindow(1920, 1080, "Arkantos")
 	var err error
 	config, err = internal.LoadConfig("arkantos.conf")
 	if err != nil {
@@ -26,6 +26,7 @@ func start(debug bool) error {
 	rl.SetWindowState(rl.FlagWindowMaximized | rl.FlagWindowResizable)
 	rl.SetConfigFlags(rl.FlagMsaa4xHint)
 	rl.MaximizeWindow()
+	rl.SetExitKey(rl.KeyF11)
 	openedBuffers = make([]internal.Buffer, 0)
 	currentBuffer = 0
 

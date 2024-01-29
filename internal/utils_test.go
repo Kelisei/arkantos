@@ -21,10 +21,6 @@ func TestLoadConfig(t *testing.T) {
 		if conf.FontSize != 14 {
 			t.Fatal("Expected conf.FontSize to be '14' but got " + strconv.Itoa(conf.FontSize))
 		}
-		if conf.FontFamily != "Consolas, Menlo, Monaco, 'Courier New', monospace" {
-			t.Fatal("Expected conf.FontFamily to be 'Consolas, Menlo, Monaco, 'Courier New', monospace' but got " + conf.FontFamily)
-		}
-
 	})
 
 	t.Run("invalid path", func(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -67,15 +68,39 @@ func (b *Buffer) RenderBuffer(fontSize int, fontColor, highlight rl.Color, font 
 		position.X = float32(b.Padding + fontSize)
 		rl.DrawTextEx(font, line, position, float32(fontSize), 0, fontColor)
 	}
+	height := rl.GetScreenHeight()
+	width := rl.GetScreenWidth()
+	pathPos := rl.Vector2{X: float32(b.Padding), Y: float32(height - fontSize)}
+	rl.DrawTextEx(font, "Buffer: "+b.Path, pathPos, float32(fontSize), 0, highlight)
+	currentMode := ""
+	switch b.Mode {
+	case Insert:
+		currentMode = "Insert"
+	case Normal:
+		currentMode = "Normal"
+	default:
+		currentMode = "Unknown"
+	}
+	modePos := rl.Vector2{X: float32(width - utf8.RuneCountInString(currentMode)*fontSize), Y: float32(height - fontSize)}
+	rl.DrawTextEx(font, "--"+currentMode+"--", modePos, float32(fontSize), 0, highlight)
 	return nil
 }
 func (b *Buffer) ListenInput() {
 	if b.Mode == Insert {
+		if rl.IsKeyPressed(rl.KeyEscape) {
+			b.Mode = Normal
+		}
+	}
+	if b.Mode == Normal {
 		if rl.IsKeyPressed(rl.KeyJ) && b.BufferCursor.Y < len(b.Lines)-1 {
 			b.BufferCursor.Y++
 		}
 		if rl.IsKeyPressed(rl.KeyK) && b.BufferCursor.Y > 0 {
 			b.BufferCursor.Y--
 		}
+		if rl.IsKeyPressed(rl.KeyI) {
+			b.Mode = Insert
+		}
 	}
+
 }
