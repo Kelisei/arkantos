@@ -63,7 +63,7 @@ func NewTheme(theme jsonTheme) Theme {
 
 func NewConfig(c jsonConfig) Configuration {
 	font := rl.LoadFont("static/fonts/" + c.MainFont)
-	rl.SetTextureFilter(font.Texture, rl.TextureFilterMipNearest)
+	rl.SetTextureFilter(font.Texture, rl.FilterTrilinear)
 	return Configuration{ThemeName: c.ThemeName, FontSize: c.FontSize, MainFont: font}
 }
 
