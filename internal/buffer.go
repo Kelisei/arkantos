@@ -121,7 +121,9 @@ func wrapCursor(previousLineLen int, b *Buffer) {
 }
 
 func (b *Buffer) ListenInput() {
-	if b.Mode == Insert {
+	if rl.IsKeyDown(rl.KeyLeftControl) && rl.IsKeyPressed(rl.KeyS) {
+		b.Save()
+	} else if b.Mode == Insert {
 		if rl.IsKeyPressed(rl.KeyEscape) {
 			b.Mode = Normal
 		}
@@ -151,14 +153,27 @@ func (b *Buffer) ListenInput() {
 			b.BufferCursor.Y++
 			b.BufferCursor.X = 0
 		}
+		if rl.IsKeyPressed(rl.KeyDown) && b.BufferCursor.Y < len(b.Lines)-1 {
+			b.BufferCursor.Y++
+			wrapCursor(utf8.RuneCountInString(b.Lines[b.BufferCursor.Y-1]), b)
+		}
+		if rl.IsKeyPressed(rl.KeyUp) && b.BufferCursor.Y > 0 {
+			b.BufferCursor.Y--
+			wrapCursor(utf8.RuneCountInString(b.Lines[b.BufferCursor.Y+1]), b)
+		}
+		if rl.IsKeyPressed(rl.KeyRight) && b.BufferCursor.X < utf8.RuneCountInString(b.Lines[b.BufferCursor.Y]) {
+			b.BufferCursor.X++
+		}
+		if rl.IsKeyPressed(rl.KeyLeft) && b.BufferCursor.X > 0 {
+			b.BufferCursor.X--
+		}
 		key := rl.GetCharPressed()
 		if key >= 32 && key <= 126 {
 			line := b.Lines[b.BufferCursor.Y]
 			b.Lines[b.BufferCursor.Y] = line[:b.BufferCursor.X] + string(rune(key)) + line[b.BufferCursor.X:]
 			b.BufferCursor.X++
 		}
-	}
-	if b.Mode == Normal {
+	} else if b.Mode == Normal {
 		if rl.IsKeyPressed(rl.KeyJ) && b.BufferCursor.Y < len(b.Lines)-1 {
 			b.BufferCursor.Y++
 			wrapCursor(utf8.RuneCountInString(b.Lines[b.BufferCursor.Y-1]), b)
@@ -177,5 +192,17 @@ func (b *Buffer) ListenInput() {
 			b.Mode = Insert
 		}
 	}
+}
 
+func (b *Buffer) Save() {
+	file, err := os.Create(b.Path)
+	if err != nil {
+		LogError(err)
+		return
+	}
+	content := strings.Join(b.Lines, "\n")
+	_, err = file.WriteString(content)
+	if err != nil {
+		LogError(err)
+	}
 }
