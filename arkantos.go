@@ -49,17 +49,14 @@ func start() error {
 	return err
 }
 func input() {
-	openedBuffers[currentBuffer].ListenInput(&closeWindow)
+	openedBuffers[currentBuffer].ListenInput(&closeWindow, config.MainFont, config.FontSize)
 }
-func update() {
-}
-func render() error {
+func render() {
 	rl.BeginDrawing()
 	rl.DrawFPS(1800, 10)
 	rl.ClearBackground(theme.BgColor)
-	err := openedBuffers[currentBuffer].RenderBuffer(config.FontSize, theme.FontColor, theme.Highlight, theme.BottomBarColor, theme.BottomBarFontColor, config.MainFont)
+	openedBuffers[currentBuffer].RenderBuffer(config.FontSize, theme.FontColor, theme.Highlight, theme.BottomBarColor, theme.BottomBarFontColor, config.MainFont)
 	rl.EndDrawing()
-	return err
 }
 
 func main() {
@@ -68,14 +65,10 @@ func main() {
 		internal.LogError(err)
 		return
 	}
-	fmt.Println(openedBuffers[currentBuffer].BufferCursor)
 	defer rl.CloseWindow()
 	rl.SetTargetFPS(120)
-	for !rl.WindowShouldClose() && err == nil && !closeWindow {
+	for !rl.WindowShouldClose() && !closeWindow {
 		input()
-		err = render()
-		if err != nil {
-			internal.LogError(err)
-		}
+		render()
 	}
 }

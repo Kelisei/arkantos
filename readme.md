@@ -1,5 +1,6 @@
-# Arkantos, a simple note taking app in the making.
-
+# Arkantos, a text editor in the making.
+## For whom it concerns: Not usable at the moment in a realistic way.
+### TODO: Rewrite of writing in progress for better modularization
 <img src="Arkantos.png">
 
 
