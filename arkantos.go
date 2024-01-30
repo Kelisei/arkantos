@@ -2,7 +2,9 @@ package main
 
 import (
 	"arkantos/internal"
+	"errors"
 	"fmt"
+	"os"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -11,11 +13,10 @@ var theme internal.Theme
 var config internal.Configuration
 var openedBuffers []internal.Buffer
 var currentBuffer int
-var keyMap map[int32]string
 
 // The start function, loads the configuration file, get's the theme selected
 // setups the window, creates and initializes a buffer slice
-func start(debug bool) error {
+func start() error {
 	rl.SetConfigFlags(rl.FlagMsaa4xHint)
 	rl.InitWindow(1920, 1080, "Arkantos")
 	var err error
@@ -24,22 +25,27 @@ func start(debug bool) error {
 		return err
 	}
 	theme, err = internal.ThemeParse(config.ThemeName)
+	if err != nil {
+		return err
+	}
 	rl.SetWindowState(rl.FlagWindowMaximized | rl.FlagWindowResizable)
 	rl.SetConfigFlags(rl.FlagMsaa4xHint)
 	rl.MaximizeWindow()
 	rl.SetExitKey(rl.KeyF11)
 	openedBuffers = make([]internal.Buffer, 0)
 	currentBuffer = 0
-
-	if debug {
-		var debugBuffer internal.Buffer
-		debugBuffer, err = internal.NewBuffer("testbuffer")
-		if err != nil {
-			return err
-		}
-		fmt.Printf("succesfully opened the testbuffer \n")
-		openedBuffers = append(openedBuffers, debugBuffer)
+	args := os.Args
+	fmt.Println(args)
+	if len(args) < 2 || len(args) > 2 {
+		return errors.New("wrong number of parameters, did you mean to pass a file path?")
 	}
+	var buffer internal.Buffer
+	buffer, err = internal.NewBuffer(args[1])
+	if err != nil {
+		return err
+	}
+	openedBuffers = append(openedBuffers, buffer)
+
 	return err
 }
 func input() {
@@ -57,7 +63,7 @@ func render() error {
 }
 
 func main() {
-	err := start(true)
+	err := start()
 	if err != nil {
 		internal.LogError(err)
 		return

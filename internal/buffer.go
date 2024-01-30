@@ -1,7 +1,9 @@
 package internal
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -56,7 +58,14 @@ func absInt(num int) int {
 }
 
 func NewBuffer(path string) (Buffer, error) {
-	content, err := os.ReadFile(path)
+	fmt.Println(path)
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return Buffer{}, err
+	}
+	fmt.Println(path)
+	var content []byte
+	content, err = os.ReadFile(path)
 	if err != nil {
 		return Buffer{}, err
 	}
