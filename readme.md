@@ -3,26 +3,26 @@
 <img src="Arkantos.png">
 
 
-Explanation of the project:
+## Explanation of the project:
 
-This is a learning project to learn GO, since I have never built a text editor
+#### This is a learning project to learn GO, since I have never built a text editor
 some of choices made may be questionable.
 
-Commands:
+#### Commands:
 
-CTRL + s/S : saves file
+#### CTRL + s/S : saves file
 
-Normal mode:
-    hjkl: Movement keys (like vim)
-    w/W + ENTER: save file
-    w/W + q/Q + ENTER: save and quit
-    q/Q + ENTER: quits
-    i/I: enters insertion mode
+#### Normal mode:
+####    hjkl: Movement keys (like vim)
+####    w/W + ENTER: save file
+####    w/W + q/Q + ENTER: save and quit
+####    q/Q + ENTER: quits
+####    i/I: enters insertion mode
 
-Insertion mode:
-    ESC: enters normal mode
-    Else it behaves like a normal text editor
-    TODO: copy and paste
+#### Insertion mode:
+####    ESC: enters normal mode
+####    Else it behaves like a normal text editor
+####    TODO: copy and paste
 
-Sources:
+#### Sources:
 <a>https://github.com/gen2brain/raylib-go</a>
