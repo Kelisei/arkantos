@@ -30,7 +30,7 @@ type Cursor struct {
 }
 
 func (c *Cursor) DrawCursor(fontSize, padding int, color rl.Color, b Buffer, font rl.Font) {
-	lineStart := padding + fontSize
+	lineStart := padding + fontSize*2
 	line := b.Lines[c.Y]
 
 	xStart := int32(lineStart + int(rl.MeasureTextEx(font, line[:c.X], float32(fontSize), 0).X))
@@ -42,12 +42,13 @@ func (c *Cursor) DrawCursor(fontSize, padding int, color rl.Color, b Buffer, fon
 }
 
 type Buffer struct {
-	Path         string
-	Mode         int
-	Lines        []string
-	BufferCursor Cursor
-	UndoList     []Change
-	Padding      int
+	Path           string
+	Mode           int
+	Lines          []string
+	BufferCursor   Cursor
+	UndoList       []Change
+	Padding        int
+	CurrentCommand string
 }
 
 func absInt(num int) int {
@@ -72,39 +73,45 @@ func NewBuffer(path string) (Buffer, error) {
 	cursor := Cursor{X: 0, Y: 0, YOffset: 0, XOffset: 0}
 	undos := make([]Change, 0)
 	lines := strings.Split(string(content), "\n")
-	return Buffer{Path: path, Mode: Insert, Lines: lines, BufferCursor: cursor, UndoList: undos, Padding: 10}, nil
+	return Buffer{Path: path, Mode: Insert, Lines: lines, BufferCursor: cursor, UndoList: undos, Padding: 10, CurrentCommand: ""}, nil
 }
 
-func (b *Buffer) RenderBuffer(fontSize int, fontColor, highlight rl.Color, font rl.Font) error {
+func (b *Buffer) RenderBuffer(fontSize int, fontColor, highlight, bottomBarColor, bottomBarFontColor rl.Color, font rl.Font) error {
 	b.BufferCursor.DrawCursor(fontSize, b.Padding, highlight, *b, font)
 	for i, line := range b.Lines {
 		var lineNumber string
 		lineNumberColor := rl.White
 		if i != b.BufferCursor.Y {
-			lineNumber = strconv.Itoa(absInt(i - b.BufferCursor.Y))
+			lineNumber = strconv.Itoa(absInt(i - b.BufferCursor.Y - b.BufferCursor.XOffset))
 		} else {
 			lineNumber = strconv.Itoa(i + 1)
 			lineNumberColor = highlight
 		}
 		position := rl.Vector2{X: float32(b.Padding + 1), Y: float32(i * fontSize)}
 		rl.DrawTextEx(font, lineNumber, position, float32(fontSize), 0, lineNumberColor)
-		position.X = float32(b.Padding + fontSize)
+		position.X = float32(b.Padding + fontSize*2)
 		rl.DrawTextEx(font, line, position, float32(fontSize), 0, fontColor)
 	}
-	drawBottomBar(fontSize, b, font, highlight)
+	drawBottomBar(fontSize, b, font, bottomBarFontColor, bottomBarColor)
 	return nil
 }
 
 // Given certain parameters and the size of the screen, draws the current buffer,
 // the cursor position and the current mode.
-func drawBottomBar(fontSize int, b *Buffer, font rl.Font, highlight rl.Color) {
+func drawBottomBar(fontSize int, b *Buffer, font rl.Font, fontColor, bg rl.Color) {
 	height := rl.GetScreenHeight()
 	width := rl.GetScreenWidth()
 	bottomPos := float32(height - fontSize)
 
+	rl.DrawRectangle(0, int32(bottomPos-float32(fontSize)), int32(width), int32(fontSize*2), bg)
+
+	statusPos := rl.Vector2{X: float32(b.Padding), Y: bottomPos - float32(fontSize)}
+	statusString := ":" + b.CurrentCommand
+	rl.DrawTextEx(font, statusString, statusPos, float32(fontSize), 0, fontColor)
+
 	pathPos := rl.Vector2{X: float32(b.Padding), Y: bottomPos}
 	pathStr := "Buffer :" + b.Path
-	rl.DrawTextEx(font, pathStr, pathPos, float32(fontSize), 0, highlight)
+	rl.DrawTextEx(font, pathStr, pathPos, float32(fontSize), 0, fontColor)
 
 	currentMode := ""
 	switch b.Mode {
@@ -116,11 +123,11 @@ func drawBottomBar(fontSize int, b *Buffer, font rl.Font, highlight rl.Color) {
 		currentMode = "Unknown"
 	}
 	modePos := rl.Vector2{X: float32(width - utf8.RuneCountInString(currentMode)*fontSize), Y: bottomPos}
-	rl.DrawTextEx(font, "--"+currentMode+"--", modePos, float32(fontSize), 0, highlight)
+	rl.DrawTextEx(font, "--"+currentMode+"--", modePos, float32(fontSize), 0, fontColor)
 
 	cursorPosStr := strconv.Itoa(b.BufferCursor.X+1) + "," + strconv.Itoa(b.BufferCursor.Y+1)
 	cursorPos := rl.Vector2{X: float32(rl.MeasureText(pathStr, int32(fontSize))), Y: bottomPos}
-	rl.DrawTextEx(font, cursorPosStr, cursorPos, float32(fontSize), 0, highlight)
+	rl.DrawTextEx(font, cursorPosStr, cursorPos, float32(fontSize), 0, fontColor)
 }
 
 func wrapCursor(previousLineLen int, b *Buffer) {
@@ -129,12 +136,13 @@ func wrapCursor(previousLineLen int, b *Buffer) {
 	}
 }
 
-func (b *Buffer) ListenInput() {
+func (b *Buffer) ListenInput(closeWindow *bool) {
 	if rl.IsKeyDown(rl.KeyLeftControl) && rl.IsKeyPressed(rl.KeyS) {
 		b.Save()
 	} else if b.Mode == Insert {
 		if rl.IsKeyPressed(rl.KeyEscape) {
 			b.Mode = Normal
+			b.CurrentCommand = "ESC"
 		}
 		if rl.IsKeyPressed(rl.KeyBackspace) {
 			line := b.Lines[b.BufferCursor.Y]
@@ -183,35 +191,64 @@ func (b *Buffer) ListenInput() {
 			b.BufferCursor.X++
 		}
 	} else if b.Mode == Normal {
+		if rl.IsKeyPressed(rl.KeyW) {
+			b.CurrentCommand = "w"
+		}
+		if rl.IsKeyPressed(rl.KeyQ) {
+			if b.CurrentCommand == "w" {
+				b.CurrentCommand += "q"
+			}
+			b.CurrentCommand = "q"
+		}
+		if rl.IsKeyPressed(rl.KeyEnter) {
+			switch b.CurrentCommand {
+			case "w":
+				b.Save()
+			case "q":
+				*closeWindow = true
+			case "wq":
+				b.Save()
+				*closeWindow = true
+			}
+		}
 		if rl.IsKeyPressed(rl.KeyJ) && b.BufferCursor.Y < len(b.Lines)-1 {
 			b.BufferCursor.Y++
 			wrapCursor(utf8.RuneCountInString(b.Lines[b.BufferCursor.Y-1]), b)
+			b.CurrentCommand = "j"
 		}
 		if rl.IsKeyPressed(rl.KeyK) && b.BufferCursor.Y > 0 {
 			b.BufferCursor.Y--
 			wrapCursor(utf8.RuneCountInString(b.Lines[b.BufferCursor.Y+1]), b)
+			b.CurrentCommand = "k"
 		}
 		if rl.IsKeyPressed(rl.KeyL) && b.BufferCursor.X < utf8.RuneCountInString(b.Lines[b.BufferCursor.Y]) {
 			b.BufferCursor.X++
+			b.CurrentCommand = "l"
 		}
 		if rl.IsKeyPressed(rl.KeyH) && b.BufferCursor.X > 0 {
 			b.BufferCursor.X--
+			b.CurrentCommand = "h"
 		}
 		if rl.IsKeyPressed(rl.KeyI) {
 			b.Mode = Insert
+			b.CurrentCommand = "i"
 		}
+
 	}
 }
 
 func (b *Buffer) Save() {
 	file, err := os.Create(b.Path)
 	if err != nil {
+		b.CurrentCommand = "Failed to overwrite file"
 		LogError(err)
 		return
 	}
 	content := strings.Join(b.Lines, "\n")
 	_, err = file.WriteString(content)
 	if err != nil {
+		b.CurrentCommand = "Failed to write into file"
 		LogError(err)
 	}
+	b.CurrentCommand = "Buffer saved"
 }

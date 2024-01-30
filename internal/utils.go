@@ -25,21 +25,25 @@ type jsonConfig struct {
 }
 
 type Theme struct {
-	Name        string
-	Version     string
-	Description string
-	BgColor     rl.Color
-	FontColor   rl.Color
-	Highlight   rl.Color
+	Name               string
+	Version            string
+	Description        string
+	BgColor            rl.Color
+	FontColor          rl.Color
+	Highlight          rl.Color
+	BottomBarColor     rl.Color
+	BottomBarFontColor rl.Color
 }
 
 type jsonTheme struct {
-	Name        string
-	Version     string
-	Description string
-	BgColor     string
-	FontColor   string
-	Highlight   string
+	Name               string
+	Version            string
+	Description        string
+	BgColor            string
+	FontColor          string
+	Highlight          string
+	BottomBarColor     string
+	BottomBarFontColor string
 }
 
 func hexToRaylib(hexa string) rl.Color {
@@ -60,6 +64,8 @@ func NewTheme(theme jsonTheme) Theme {
 	t.BgColor = hexToRaylib(theme.BgColor)
 	t.FontColor = hexToRaylib(theme.FontColor)
 	t.Highlight = hexToRaylib(theme.Highlight)
+	t.BottomBarColor = hexToRaylib(theme.BottomBarColor)
+	t.BottomBarFontColor = hexToRaylib(theme.BottomBarFontColor)
 	return t
 }
 

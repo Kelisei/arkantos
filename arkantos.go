@@ -13,6 +13,7 @@ var theme internal.Theme
 var config internal.Configuration
 var openedBuffers []internal.Buffer
 var currentBuffer int
+var closeWindow bool
 
 // The start function, loads the configuration file, get's the theme selected
 // setups the window, creates and initializes a buffer slice
@@ -45,11 +46,10 @@ func start() error {
 		return err
 	}
 	openedBuffers = append(openedBuffers, buffer)
-
 	return err
 }
 func input() {
-	openedBuffers[currentBuffer].ListenInput()
+	openedBuffers[currentBuffer].ListenInput(&closeWindow)
 }
 func update() {
 }
@@ -57,7 +57,7 @@ func render() error {
 	rl.BeginDrawing()
 	rl.DrawFPS(1800, 10)
 	rl.ClearBackground(theme.BgColor)
-	err := openedBuffers[currentBuffer].RenderBuffer(config.FontSize, theme.FontColor, theme.Highlight, config.MainFont)
+	err := openedBuffers[currentBuffer].RenderBuffer(config.FontSize, theme.FontColor, theme.Highlight, theme.BottomBarColor, theme.BottomBarFontColor, config.MainFont)
 	rl.EndDrawing()
 	return err
 }
@@ -71,7 +71,7 @@ func main() {
 	fmt.Println(openedBuffers[currentBuffer].BufferCursor)
 	defer rl.CloseWindow()
 	rl.SetTargetFPS(120)
-	for !rl.WindowShouldClose() && err == nil {
+	for !rl.WindowShouldClose() && err == nil && !closeWindow {
 		input()
 		err = render()
 		if err != nil {

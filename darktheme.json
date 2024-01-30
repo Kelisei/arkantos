@@ -4,5 +4,7 @@
     "Description": "Dark theme for Arkantos",
     "BgColor": "#131313",
     "FontColor": "#FFFFFF",
-    "Highlight": "#FFFF00"
+    "Highlight": "#FFFF00",
+    "BottomBarColor":"#151515",
+    "BottomBarFontColor":"#FF0000"
 }
