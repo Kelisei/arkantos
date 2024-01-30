@@ -9,7 +9,7 @@
 
 #### Commands:
 
-#### CTRL + s/S : saves file
+- CTRL + s/S : saves file
 
 #### Normal mode:
 -       hjkl: Movement keys (like vim)
