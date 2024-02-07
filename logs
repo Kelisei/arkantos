@@ -1,0 +1,2 @@
+2024-02-06 16:37:33|Failed to read from buffer: open /home/kelisei/Documents/arkantos/config.toml,: no such file or directory
+2024-02-07 18:52:46|strconv.Atoi: parsing "j": invalid syntax

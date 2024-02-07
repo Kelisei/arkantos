@@ -1,226 +1,202 @@
 package internal
 
 import (
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
+
+	sitter "github.com/smacker/go-tree-sitter"
+
+	"github.com/smacker/go-tree-sitter/golang"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-// Modes
 const (
-	Insert = iota
-	Normal
+	INSERT = iota
+	NORMAL
 )
 
-// Represents the history of the file, meaning the lines changed and it's index.
 type Change struct {
-	Lines []string
-	Index int
+	StartingLine int
+	Lines        []string
 }
 
 type Buffer struct {
 	Path           string
-	Mode           int
-	Lines          []string
+	Content        string
 	BCursor        Cursor
-	UndoList       []Change
-	Padding        int
+	Mode           int
+	History        []Change
 	CurrentCommand string
+	CurrentChange  int
+	YScroll        int32
+	XScroll        int32
+	X              int32
+	Y              int32
+	Width          int32
+	Height         int32
+	Exists         bool
+	Lang           *sitter.Language
 }
 
-// Given a path, it creates a new Buffer with default values and the file's content.
-func NewBuffer(path string) (Buffer, error) {
-	fmt.Println(path)
-	path, err := filepath.Abs(path)
+func NewBufferFromPath(path string, langs map[string]*sitter.Language) (Buffer, error) {
+	bufferPath, errPath := filepath.Abs(path)
+	if errPath != nil {
+		return Buffer{}, errors.New("Failed to find path to buffer: " + errPath.Error())
+	}
+	content, errRead := os.ReadFile(bufferPath)
+	if errRead != nil {
+		return Buffer{}, errors.New("Failed to read from buffer: " + errRead.Error())
+	}
+	cursor := Cursor{X: 0, Y: 0, Length: 0}
+	split := strings.Split(bufferPath, ".")
+	suffix := split[len(split)-1]
+
+	return Buffer{
+		Path:           bufferPath,
+		Content:        string(content),
+		BCursor:        cursor,
+		Mode:           INSERT,
+		History:        make([]Change, 0),
+		CurrentCommand: "",
+		CurrentChange:  0,
+		YScroll:        0,
+		XScroll:        0,
+		Exists:         true,
+		Lang:           langs[suffix],
+	}, nil
+}
+
+func NewEmptyBuffer() (Buffer, error) {
+	path, err := filepath.Abs("blank-name")
 	if err != nil {
 		return Buffer{}, err
 	}
-	fmt.Println(path)
-	var content []byte
-	content, err = os.ReadFile(path)
+	return Buffer{
+		Path:           path,
+		Content:        "",
+		BCursor:        Cursor{X: 0, Y: 0, Length: 0},
+		Mode:           INSERT,
+		CurrentCommand: "",
+		CurrentChange:  0,
+		YScroll:        0,
+		XScroll:        0,
+		Exists:         false,
+		Lang:           nil,
+	}, nil
+}
+
+func (b *Buffer) Update() {
+	file, err := os.Open(b.Path)
 	if err != nil {
-		return Buffer{}, err
-	}
-	cursor := Cursor{X: 0, Y: 0, YOffset: 0, XOffset: 0}
-	undos := make([]Change, 0)
-	lines := strings.Split(string(content), "\n")
-	return Buffer{Path: path, Mode: Insert, Lines: lines, BCursor: cursor, UndoList: undos, Padding: 10, CurrentCommand: ""}, nil
-}
-
-// Draws in screen the lines in order, and the bottom info bar.
-func (b *Buffer) RenderBuffer(fontSize int, fontColor, highlight, bottomBarColor, bottomBarFontColor rl.Color, font rl.Font) {
-	drawLines(b, fontSize, font, fontColor, highlight)
-	drawBottomBar(fontSize, b, font, bottomBarFontColor, bottomBarColor)
-}
-
-func drawLines(b *Buffer, fontSize int, font rl.Font, fontColor, highlight rl.Color) {
-	// YOffset is how much the lines should be moved up or down in order to see them.
-	b.BCursor.DrawCursor(fontSize, b.Padding, highlight, *b, font)
-	for i, line := range b.Lines {
-		var lineNumber string
-		lineNumberColor := rl.White
-		if i != b.BCursor.Y {
-			lineNumber = strconv.Itoa(absInt(i - b.BCursor.Y))
-		} else {
-			lineNumber = strconv.Itoa(i + 1)
-			lineNumberColor = highlight
-		}
-		position := rl.Vector2{X: float32(b.Padding + 1), Y: float32((i + b.BCursor.YOffset) * fontSize)}
-		rl.DrawTextEx(font, lineNumber, position, float32(fontSize), 0, lineNumberColor)
-		position.X = float32(b.Padding + fontSize*2)
-		rl.DrawTextEx(font, line, position, float32(fontSize), 0, fontColor)
+		b.Exists = false
+	} else {
+		file.Close()
 	}
 }
 
-// Given certain parameters and the size of the screen, draws the current buffer,
-// the cursor position and the current mode.
-func drawBottomBar(fontSize int, b *Buffer, font rl.Font, fontColor, bg rl.Color) {
-	height := rl.GetScreenHeight()
-	width := rl.GetScreenWidth()
-	bottomPos := float32(height - fontSize)
-
-	rl.DrawRectangle(0, int32(bottomPos-float32(fontSize)), int32(width), int32(fontSize*2), bg)
-
-	statusPos := rl.Vector2{X: float32(b.Padding), Y: bottomPos - float32(fontSize)}
-	statusString := ":" + b.CurrentCommand
-	rl.DrawTextEx(font, statusString, statusPos, float32(fontSize), 0, fontColor)
-
-	pathPos := rl.Vector2{X: float32(b.Padding), Y: bottomPos}
-	pathStr := "Buffer :" + b.Path
-	rl.DrawTextEx(font, pathStr, pathPos, float32(fontSize), 0, fontColor)
-
-	currentMode := ""
-	switch b.Mode {
-	case Insert:
-		currentMode = "Insert"
-	case Normal:
-		currentMode = "Normal"
+func (b *Buffer) Render(c Configuration, langs map[string]*sitter.Language) {
+	rl.BeginScissorMode(b.X, b.Y, b.Width, b.Height)
+	switch b.Lang {
 	default:
-		currentMode = "Unknown"
+		lines := strings.Split(b.Content, "\n")
+		b.BCursor.draw(
+			int(c.FontSize*2),
+			b.YScroll,
+			b.XScroll,
+			c.FontSize,
+			lines[b.BCursor.Y],
+			c.FontRegular,
+			c.DefaultFontColor,
+		)
+		for i, line := range lines {
+			lineNumber := i
+			var lineNumberColor rl.Color
+			if i == b.BCursor.Y {
+				lineNumberColor = c.DefaultFontColor
+			} else {
+				lineNumberColor = c.SecondaryFontColor
+			}
+			if c.RelativeLineNumbers {
+				if lineNumber != b.BCursor.Y {
+					lineNumber = absInt(i-b.BCursor.Y) - 1
+				}
+			}
+			lineYPos := float32(b.Y) + (c.FontSize * float32(i-int(b.YScroll)))
+			rl.DrawTextEx(
+				c.FontRegular,
+				strconv.Itoa(lineNumber+1),
+				rl.NewVector2(float32(b.XScroll), lineYPos),
+				c.FontSize,
+				0,
+				lineNumberColor,
+			)
+			rl.DrawTextEx(
+				c.FontRegular,
+				line,
+				rl.NewVector2(c.FontSize*2, lineYPos),
+				c.FontSize,
+				0,
+				c.DefaultFontColor,
+			)
+		}
 	}
-	modePos := rl.Vector2{X: float32(width - utf8.RuneCountInString(currentMode)*fontSize), Y: bottomPos}
-	rl.DrawTextEx(font, "--"+currentMode+"--", modePos, float32(fontSize), 0, fontColor)
-
-	cursorPosStr := strconv.Itoa(b.BCursor.X+1) + "," + strconv.Itoa(b.BCursor.Y+1)
-	cursorPos := rl.Vector2{X: float32(rl.MeasureText(pathStr, int32(fontSize))), Y: bottomPos}
-	rl.DrawTextEx(font, cursorPosStr, cursorPos, float32(fontSize), 0, fontColor)
+	b.DrawBottomBar(c)
+	rl.EndScissorMode()
 }
 
-// Listens for input and acts on it, allows for complex commands.
-func (b *Buffer) ListenInput(closeWindow *bool, font rl.Font, fontSize int) {
-	if rl.IsKeyDown(rl.KeyLeftControl) && rl.IsKeyPressed(rl.KeyS) {
-		b.Save()
-	} else if b.Mode == Insert {
-		if rl.IsKeyPressed(rl.KeyEscape) {
-			b.Mode = Normal
-			b.CurrentCommand = "ESC"
-		}
-		if rl.IsKeyPressed(rl.KeyBackspace) {
-			line := b.Lines[b.BCursor.Y]
-			if b.BCursor.X > 0 {
-				b.Lines[b.BCursor.Y] = line[:b.BCursor.X-1] + line[b.BCursor.X:]
-				b.BCursor.X--
-			} else if b.BCursor.Y > 0 {
-				newBufferSlice := make([]string, 0)
-				newBufferSlice = append(newBufferSlice, b.Lines[:b.BCursor.Y]...)
-				newBufferSlice[b.BCursor.Y-1] += line
-				newBufferSlice = append(newBufferSlice, b.Lines[b.BCursor.Y+1:]...)
-				b.BCursor.Y--
-				b.BCursor.X = utf8.RuneCountInString(b.Lines[b.BCursor.Y])
-				b.Lines = newBufferSlice
-			}
-		}
-		if rl.IsKeyPressed(rl.KeyEnter) {
-			line := b.Lines[b.BCursor.Y]
-			b.Lines[b.BCursor.Y] = line[:b.BCursor.X] + "\n" + line[b.BCursor.X:]
-			newBufferSlice := make([]string, 0)
-			newBufferSlice = append(newBufferSlice, b.Lines[:b.BCursor.Y]...)
-			newBufferSlice = append(newBufferSlice, strings.Split(b.Lines[b.BCursor.Y], "\n")...)
-			newBufferSlice = append(newBufferSlice, b.Lines[b.BCursor.Y+1:]...)
-			b.Lines = newBufferSlice
-			b.BCursor.Y++
-			b.BCursor.X = 0
-		}
-		if rl.IsKeyPressed(rl.KeyDown) && b.BCursor.Y < len(b.Lines)-1 {
-			b.BCursor.Y++
-			b.BCursor.WrapCursor(utf8.RuneCountInString(b.Lines[b.BCursor.Y-1]), b)
-			lineHeight := rl.MeasureTextEx(font, " ", float32(fontSize), 0).Y
-			if lineHeight*float32(b.BCursor.Y-b.BCursor.YOffset) >= float32(rl.GetScreenHeight()-fontSize*2) {
-				b.BCursor.ChangeYOffset(-1)
-			}
-		}
-		if rl.IsKeyPressed(rl.KeyUp) && b.BCursor.Y > 0 {
-			b.BCursor.Y--
-			b.BCursor.WrapCursor(utf8.RuneCountInString(b.Lines[b.BCursor.Y+1]), b)
-			if (b.BCursor.Y+b.BCursor.YOffset)*fontSize < 0 {
-				b.BCursor.ChangeYOffset(1)
-			}
-		}
-		if rl.IsKeyPressed(rl.KeyRight) && b.BCursor.X < utf8.RuneCountInString(b.Lines[b.BCursor.Y]) {
-			b.BCursor.X++
-		}
-		if rl.IsKeyPressed(rl.KeyLeft) && b.BCursor.X > 0 {
-			b.BCursor.X--
-		}
-		key := rl.GetCharPressed()
-		if key >= 32 && key <= 126 {
-			line := b.Lines[b.BCursor.Y]
-			b.Lines[b.BCursor.Y] = line[:b.BCursor.X] + string(rune(key)) + line[b.BCursor.X:]
-			b.BCursor.X++
-		}
-	} else if b.Mode == Normal {
-		if rl.IsKeyPressed(rl.KeyW) {
-			b.CurrentCommand = "w"
-		}
-		if rl.IsKeyPressed(rl.KeyQ) {
-			if b.CurrentCommand == "w" {
-				b.CurrentCommand += "q"
-			}
-			b.CurrentCommand = "q"
-		}
-		if rl.IsKeyPressed(rl.KeyEnter) {
-			switch b.CurrentCommand {
-			case "w":
-				b.Save()
-			case "q":
-				*closeWindow = true
-			case "wq":
-				b.Save()
-				*closeWindow = true
-			}
-		}
-		if rl.IsKeyPressed(rl.KeyJ) && b.BCursor.Y < len(b.Lines)-1 {
-			b.BCursor.Y++
-			b.BCursor.WrapCursor(utf8.RuneCountInString(b.Lines[b.BCursor.Y-1]), b)
-			b.CurrentCommand = "j"
-		}
-		if rl.IsKeyPressed(rl.KeyK) && b.BCursor.Y > 0 {
-			b.BCursor.Y--
-			b.BCursor.WrapCursor(utf8.RuneCountInString(b.Lines[b.BCursor.Y+1]), b)
-			b.CurrentCommand = "k"
-		}
-		if rl.IsKeyPressed(rl.KeyL) && b.BCursor.X < utf8.RuneCountInString(b.Lines[b.BCursor.Y]) {
-			b.BCursor.X++
-			b.CurrentCommand = "l"
-		}
-		if rl.IsKeyPressed(rl.KeyH) && b.BCursor.X > 0 {
-			b.BCursor.X--
-			b.CurrentCommand = "h"
-		}
-		if rl.IsKeyPressed(rl.KeyI) {
-			b.Mode = Insert
-			b.CurrentCommand = "i"
-		}
-
+func (b *Buffer) DrawBottomBar(c Configuration) {
+	rl.DrawRectangle(
+		0,
+		b.Height-int32(c.FontSize*2),
+		b.Width,
+		int32(c.FontSize*2),
+		c.TertiaryColor,
+	)
+	cmd := ":" + b.CurrentCommand
+	mode := ""
+	var color *rl.Color
+	switch b.Mode {
+	case INSERT:
+		mode = "INSERT"
+		color = &c.AccentColor
+	case NORMAL:
+		mode = "NORMAL"
+		color = &c.AccentColor2
 	}
+	box := rl.MeasureTextEx(c.FontBold, mode, c.FontSize, 0)
+	rl.DrawRectangle(0, b.Height-int32(c.FontSize*2), int32(box.X), int32(box.Y), *color)
+	rl.DrawTextEx(
+		c.FontBold,
+		mode,
+		rl.NewVector2(0, float32(b.Height-int32(c.FontSize*2))),
+		c.FontSize,
+		0,
+		c.SecondaryFontColor,
+	)
+	rl.DrawTextEx(
+		c.FontRegular,
+		cmd,
+		rl.NewVector2(box.X, float32(b.Height-int32(c.FontSize*2))),
+		c.FontSize,
+		0,
+		c.DefaultFontColor,
+	)
+	rl.DrawTextEx(
+		c.FontItalic,
+		b.Path,
+		rl.NewVector2(0, float32(b.Height-int32(c.FontSize))),
+		c.FontSize,
+		0,
+		c.DefaultFontColor,
+	)
 }
 
-// Overwrite's the file with the content of the buffer.
 func (b *Buffer) Save() {
 	file, err := os.Create(b.Path)
 	if err != nil {
@@ -228,11 +204,136 @@ func (b *Buffer) Save() {
 		LogError(err)
 		return
 	}
-	content := strings.Join(b.Lines, "\n")
-	_, err = file.WriteString(content)
+	_, err = file.WriteString(b.Content)
 	if err != nil {
 		b.CurrentCommand = "Failed to write into file"
 		LogError(err)
 	}
-	b.CurrentCommand = "Buffer saved"
+	b.CurrentCommand = "File saved"
+}
+
+func getLinesAndUpdate(content string) ([]string, int64) {
+	return strings.Split(content, "\n"), time.Now().UnixMilli()
+}
+
+func insertLines(lines []string, y int, linesToInsert ...string) []string {
+	content := make([]string, 0)
+	content = append(content, lines[:y]...)
+	for _, line := range linesToInsert {
+		content = append(content, line)
+	}
+	content = append(content, lines[y+1:]...)
+	return content
+}
+
+func (buffer *Buffer) ListenInput(config Configuration, state *State, closeWindow *bool) {
+	if rl.IsKeyDown(rl.KeyLeftControl) && rl.IsKeyDown(rl.KeyS) {
+		buffer.Save()
+	}
+	if buffer.Mode == INSERT {
+		if rl.IsKeyPressed(rl.KeyDown) || (rl.IsKeyDown(rl.KeyDown) && IsUpdateTick(*state)) {
+			getLinesAndMoveY(1, state, buffer, config)
+		}
+		if rl.IsKeyPressed(rl.KeyUp) || (rl.IsKeyDown(rl.KeyUp) && IsUpdateTick(*state)) {
+			getLinesAndMoveY(-1, state, buffer, config)
+		}
+		if rl.IsKeyPressed(rl.KeyRight) || (rl.IsKeyDown(rl.KeyRight) && IsUpdateTick(*state)) {
+			getLinesAndMoveX(1, state, buffer)
+		}
+		if rl.IsKeyPressed(rl.KeyLeft) || (rl.IsKeyDown(rl.KeyRight) && IsUpdateTick(*state)) {
+			getLinesAndMoveX(-1, state, buffer)
+		}
+		if rl.IsKeyPressed(rl.KeyEnter) || (rl.IsKeyDown(rl.KeyEnter) && IsUpdateTick(*state)) {
+			var lines []string
+			lines, state.lastUpdateTime = getLinesAndUpdate(buffer.Content)
+			line1, line2 := lines[buffer.BCursor.Y][:buffer.BCursor.X], lines[buffer.BCursor.Y][buffer.BCursor.X:]
+			buffer.Content = strings.Join(insertLines(lines, buffer.BCursor.Y, line1, line2), "\n")
+			buffer.BCursor.moveY(1, len(lines), lines, config.FontSize, &buffer.YScroll, buffer.Height)
+			buffer.BCursor.X = 0
+		}
+		if rl.IsKeyPressed(rl.KeyBackspace) || (rl.IsKeyDown(rl.KeyBackspace) && IsUpdateTick(*state)) {
+			var lines []string
+			lines, state.lastUpdateTime = getLinesAndUpdate(buffer.Content)
+			if buffer.BCursor.X > 0 {
+				lines[buffer.BCursor.Y] = lines[buffer.BCursor.Y][:buffer.BCursor.X-1] + lines[buffer.BCursor.Y][buffer.BCursor.X:]
+				buffer.BCursor.X--
+			} else if buffer.BCursor.X == 0 && buffer.BCursor.Y > 0 {
+				previousLineLen := utf8.RuneCountInString(lines[buffer.BCursor.Y-1])
+				lines[buffer.BCursor.Y-1] += lines[buffer.BCursor.Y]
+				lines = append(lines[:buffer.BCursor.Y], lines[buffer.BCursor.Y+1:]...)
+				buffer.BCursor.moveY(-1, len(lines), lines, config.FontSize, &buffer.YScroll, buffer.Height)
+				buffer.BCursor.X = previousLineLen
+			}
+			buffer.Content = strings.Join(lines, "\n")
+		}
+		if rl.IsKeyPressed(rl.KeyEscape) {
+			buffer.Mode = NORMAL
+		}
+		key := rl.GetCharPressed()
+		if key >= 32 && key <= 126 {
+			lines := strings.Split(buffer.Content, "\n")
+			line := lines[buffer.BCursor.Y]
+			lines[buffer.BCursor.Y] = line[:buffer.BCursor.X] + string(rune(key)) + line[buffer.BCursor.X:]
+			buffer.BCursor.moveX(1, utf8.RuneCountInString(lines[buffer.BCursor.Y]))
+			buffer.Content = strings.Join(lines, "\n")
+		}
+	} else if buffer.Mode == NORMAL {
+		if rl.IsKeyPressed(rl.KeyTab) {
+			state.cycleBuffer()
+		}
+		if rl.IsKeyPressed(rl.KeyI) {
+			buffer.Mode = INSERT
+			buffer.CurrentCommand = "i"
+		}
+		if rl.IsKeyPressed(rl.KeyJ) || (rl.IsKeyDown(rl.KeyJ) && IsUpdateTick(*state)) {
+			buffer.CurrentCommand = "j"
+			getLinesAndMoveY(1, state, buffer, config)
+		}
+		if rl.IsKeyPressed(rl.KeyK) || (rl.IsKeyDown(rl.KeyK) && IsUpdateTick(*state)) {
+			buffer.CurrentCommand = "k"
+			getLinesAndMoveY(-1, state, buffer, config)
+		}
+		if rl.IsKeyPressed(rl.KeyL) || (rl.IsKeyDown(rl.KeyL) && IsUpdateTick(*state)) {
+			buffer.CurrentCommand = "l"
+			getLinesAndMoveX(1, state, buffer)
+		}
+		if rl.IsKeyPressed(rl.KeyH) || (rl.IsKeyDown(rl.KeyH) && IsUpdateTick(*state)) {
+			buffer.CurrentCommand = "h"
+			getLinesAndMoveX(-1, state, buffer)
+		}
+		if rl.IsKeyPressed(rl.KeyW) {
+			buffer.CurrentCommand = "w"
+		}
+		if rl.IsKeyPressed(rl.KeyQ) {
+			buffer.CurrentCommand += "q"
+		}
+		if rl.IsKeyPressed(rl.KeyEnter) {
+			if buffer.CurrentCommand == "w" {
+				buffer.Save()
+			} else if buffer.CurrentCommand == "q" {
+				*closeWindow = true
+			} else if buffer.CurrentCommand == "wq" {
+				buffer.Save()
+				*closeWindow = true
+			}
+		}
+	}
+}
+
+func getLinesAndMoveX(amount int, state *State, buffer *Buffer) {
+	var lines []string
+	lines, state.lastUpdateTime = getLinesAndUpdate(buffer.Content)
+	buffer.BCursor.moveX(amount, utf8.RuneCountInString(lines[buffer.BCursor.Y]))
+}
+
+func getLinesAndMoveY(amount int, s *State, b *Buffer, c Configuration) {
+	var lines []string
+	lines, s.lastUpdateTime = getLinesAndUpdate(b.Content)
+	b.BCursor.moveY(amount, len(lines), lines, c.FontSize, &b.YScroll, b.Height)
+}
+
+func GetLanguages() map[string]*sitter.Language {
+	langs := make(map[string]*sitter.Language)
+	langs["go"] = golang.GetLanguage()
+	return langs
 }
